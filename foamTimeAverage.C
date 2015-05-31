@@ -22,10 +22,12 @@
  along with OpenFOAM; if not, write to the Free Software Foundation,
  Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
- Application
- foamTimeAverage
+Application
+   foamTimeAverage
 
- Xiaoping Qiu 
+Author
+  Xiaoping Qiu 
+  q.giskard@gmail.com
 
 Description
 Calculates the time average  of the specified volField over the specified time range.
