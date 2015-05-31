@@ -1,6 +1,9 @@
 ## foamTimeAverage
 foamTimeAverage is a piece of code used to calculate time average of a specified volField over a specified time range. It is programmed based on [Eelco van Vliet's code](http://www.cfd-online.com/Forums/openfoam-programming-development/70396-using-fieldaverage-library-average-postprocessing.html) and `patchAverage` which is one of the postprocessing utilities provided by OpenFOAM. In Eelco van Vliet's version, only `volScalarField` is supported, but in this version, all volFields(including `volScalarField`, `volVectorField`, `volTensorField`, `volSymmTensorField`, `volSphericalTensorField`) are supported.  
 
+### Build
+Just run `wmake`, and the executable will be generated in `$FOAM_USER_APPBIN`
+
 ### Usage
 ```
 foamTimeAverage [fieldname] [options]
