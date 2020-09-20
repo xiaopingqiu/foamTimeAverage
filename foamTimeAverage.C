@@ -26,7 +26,7 @@ Application
    foamTimeAverage
 
 Author
-  Xiaoping Qiu 
+  Xiaoping Qiu
   q.giskard@gmail.com
 
 Description
@@ -36,13 +36,108 @@ Calculates the time average  of the specified volField over the specified time r
 
 #include "fvCFD.H"
 
-// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+template<class FieldType>
+bool headerChecker
+(
+    IOobject& fieldHeader
+);
 
 template<class FieldType>
 void calcTimeAverage
 (
     fvMesh& mesh,
-    const IOobject& fieldHeader,
+    IOobject& fieldHeader,
+    const word& fieldName,
+    Time& runTime,
+    instantList& timeDirs,
+    bool& done
+);
+
+// template<class FieldType>
+// word parseHeaderClassName
+// (
+//     IOobject& fieldHeader
+// );
+
+int main(int argc, char *argv[])
+{
+    Foam::timeSelector::addOptions();
+
+    #include "addRegionOption.H"
+
+    Foam::argList::validArgs.append("fieldName");
+    Foam::argList::validArgs.append("fieldType");
+
+    #include "setRootCase.H"
+    #include "createTime.H"
+
+    instantList timeDirs = timeSelector::select0(runTime, args);
+    runTime.setTime(timeDirs[0], 0);
+
+    #include "createNamedMesh.H"
+
+    // get filename from command line
+    word fieldName = args[1];
+    word fieldType = args[2];
+
+    bool done = false;
+
+    IOobject fieldHeader
+    (
+        fieldName,
+        runTime.timeName(),
+        mesh,
+        IOobject::MUST_READ
+    );
+
+    if (fieldType=="scalar")
+    {
+        calcTimeAverage<volScalarField>(mesh, fieldHeader, fieldName, runTime, timeDirs, done);
+    }
+    else if (fieldType =="vector")
+    {
+        calcTimeAverage<volVectorField>(mesh, fieldHeader, fieldName, runTime, timeDirs, done);
+    }
+    else if (fieldType == "tensor")
+    {
+        calcTimeAverage<volTensorField>(mesh, fieldHeader, fieldName, runTime, timeDirs, done);
+    }
+    else if (fieldType == "symmTensor")
+    {
+        calcTimeAverage<volSymmTensorField>(mesh, fieldHeader, fieldName, runTime, timeDirs, done);
+    }
+    else if (fieldType == "sphTensor")
+    {
+        calcTimeAverage<volSphericalTensorField>(mesh, fieldHeader, fieldName, runTime, timeDirs, done);
+    }
+
+    else
+    {
+        FatalErrorIn(args.executable()) << "Cannot find specified fieldType: "
+            << fieldType << exit(FatalError);
+    }
+
+    Info<< "End\n" << endl;
+
+    return 0;
+}
+
+template<class FieldType>
+bool headerChecker
+(
+    IOobject& fieldHeader
+)
+{
+    bool check = false;
+    check = fieldHeader.typeHeaderOk<FieldType>(true);
+    return check;
+}
+
+template<class FieldType>
+void calcTimeAverage
+(
+    fvMesh& mesh,
+    IOobject& fieldHeader,
     const word& fieldName,
     Time& runTime,
     instantList& timeDirs,
@@ -50,125 +145,108 @@ void calcTimeAverage
 )
 {
     label nfield = 0;
-    const word meanFieldName = fieldName + "_mean"; 
+    const word meanFieldName = fieldName + "_mean";
 
-    //Info << "class name = " << fieldHeader.headerClassName() << endl;
-    //Info << "typeName = " << FieldType::typeName << endl;
-    if(!done && fieldHeader.headerClassName() == FieldType::typeName)
+    if(headerChecker<FieldType>(fieldHeader))
     {
-	FieldType dummy
-	    (
-		IOobject
-		(
-		    fieldName,
-		    runTime.timeName(),
-		    mesh,
-		    IOobject::MUST_READ
-		),
-		mesh
-	    );
+      if(!done && fieldHeader.headerClassName()== FieldType::typeName)
+      {
+          Info << "meanField = " << meanFieldName << endl;
 
-	FieldType meanField
-	    (
-		IOobject
-		(
-		    meanFieldName,
-		    runTime.timeName(),
-		    mesh,
-		    IOobject::NO_READ
-		),
-		dummy
-	    );
+          FieldType dummy
+          (
+              IOobject
+              (
+                  fieldName,
+                  runTime.timeName(),
+                  mesh,
+                  IOobject::MUST_READ
+              ),
+              mesh
+          );
 
-	meanField *= scalar(0.0);
+          FieldType meanField
+          (
+              IOobject
+              (
+                  meanFieldName,
+                  runTime.timeName(),
+                  mesh,
+                  IOobject::NO_READ
+              ),
+              dummy
+          );
 
-	forAll(timeDirs, timeI)
-	{
-	    runTime.setTime(timeDirs[timeI], timeI);
-	    Info << "Time = " << runTime.timeName() <<endl;
+          meanField *= scalar(0.0);
 
-	    IOobject io
-		(
-		    fieldName,
-		    runTime.timeName(),
-		    mesh,
-		    IOobject::MUST_READ
-		);
+          for (label timeI = 0; timeI < timeDirs.size(); timeI++)
+          {
+              runTime.setTime(timeDirs[timeI], timeI);
+              Info << "Time = " << runTime.timeName() <<endl;
 
-	    if (io.headerOk())
-	    {
-		mesh.readUpdate();
+              IOobject io
+              (
+                  fieldName,
+                  runTime.timeName(),
+                  mesh,
+                  IOobject::MUST_READ
+              );
 
-		if(!done && io.headerClassName() == FieldType::typeName)
-		{
-		    Info << "   Reading " << io.headerClassName() << " " <<io.name() << endl;
+              if (headerChecker<FieldType>(io))
+              {
+                  mesh.readUpdate();
 
-		    FieldType field(io, mesh);
+                  if(!done && io.headerClassName() == FieldType::typeName)
+                  {
+                      Info << "   Reading " << io.headerClassName() << " " <<io.name() << endl;
 
-		    meanField += field;
-		    nfield++;
-		}
-	    }
-	    else
-	    {
-		Info << "   No Field " << fieldName << endl; 
-	    }
-	}
+                      FieldType field(io, mesh);
 
-	if(nfield > 0)
-	{
-	    Info << "number of field = " << nfield << endl;
-	    meanField /= nfield;
-	}
+                      meanField += field;
+                      nfield++;
+                  }
+              }
+              else
+              {
+                  Info << "   No Field " << fieldName << endl;
+              }
+          }
 
-	Info<< "writing to timeDir " << runTime.timeName()  << endl;
-	meanField.write();
-	done = true;
+          if(nfield > 0)
+          {
+              Info << "number of fields added = " << nfield << endl;
+              meanField /= nfield;
+          }
 
-    }
-}
-// Main program:
-
-int main(int argc, char *argv[])
-{
-
-    Foam::timeSelector::addOptions();
-    #include "addRegionOption.H"
-    Foam::argList::validArgs.append("fieldName");
-
-#   include "setRootCase.H"
-#   include "createTime.H"
-    instantList timeDirs = timeSelector::select0(runTime, args);
-    runTime.setTime(timeDirs[0], 0);
-#   include "createNamedMesh.H"
-
-    // get filename from command line
-    const word fieldName = args[1];
-    bool done = false;
-
-    IOobject fieldHeader
-	(
-	    fieldName,
-	    runTime.timeName(),
-	    mesh,
-	    IOobject::MUST_READ
-	);
-    if(fieldHeader.headerOk())//very important!
-    {
-	calcTimeAverage<volScalarField>(mesh, fieldHeader, fieldName, runTime, timeDirs, done);
-	calcTimeAverage<volVectorField>(mesh, fieldHeader, fieldName, runTime, timeDirs, done);
-	calcTimeAverage<volTensorField>(mesh, fieldHeader, fieldName, runTime, timeDirs, done);
-	calcTimeAverage<volSymmTensorField>(mesh, fieldHeader, fieldName, runTime, timeDirs, done);
-	calcTimeAverage<volSphericalTensorField>(mesh, fieldHeader, fieldName, runTime, timeDirs, done);
+          Info<< "writing to timeDir " << runTime.timeName()  << endl;
+          meanField.write();
+          done = true;
+        }
     }
     else
     {
-	Info<< " Error! No field " << fieldName << endl;
+
     }
 
-    Info<< "End\n" << endl;
-
-    return 0;
 }
+
+// template<class FieldType>
+// word parseHeaderClassName
+// (
+//     IOobject& fieldHeader
+// );
+// {
+//     if(headerChecker<FieldType>(fieldHeader))
+//     {
+//         FieldType parseFile=FieldType(fieldHeader);
+//         word className = parseFile.lookup("class");
+//         return className;
+//     }
+//     else
+//     {
+//         Info << "Failed to load specified field file  "<< endl;
+//     }
+//
+// }
 
 // ************************************************************************* //
